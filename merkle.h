@@ -1,0 +1,19 @@
+#ifndef merkle_h
+#define merkle_h
+
+#include <stdlib.h>
+
+typedef struct merkle_t merkle_t;
+typedef struct merkle_node_t merkle_node_t;
+typedef struct hash_buffer_t hash_buffer_t;
+typedef struct serializable_t serializable_t;
+
+int merkle_new(merkle_t **, hash_buffer_t *);
+int merkle_build(merkle_t *, serializable_t **, size_t);
+int merkle_debug(merkle_t *);
+int merkle_free(merkle_t *);
+
+int merkle_node_new(merkle_node_t **, size_t, size_t, merkle_node_t *,
+                    merkle_node_t *);
+
+#endif
