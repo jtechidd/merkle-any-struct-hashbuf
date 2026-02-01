@@ -25,7 +25,7 @@ typedef struct player_t {
 
 int player_serialize(serializable_t *, buffer_t *);
 
-int player_new(player_t **player_out, const char *name, uint16_t points) {
+int player_new(player_t **player_out, const char *name, uint32_t points) {
   player_t *player = malloc(sizeof(player_t));
   if (!player) {
     *player_out = NULL;
