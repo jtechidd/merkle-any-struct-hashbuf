@@ -100,6 +100,7 @@ int proof_array_debug(darray_t *proof_array) {
     TRY(darray_get_index((void **)&hash_data, proof_array, i))
     TRY(hash_data_debug(hash_data))
   }
+  return 0;
 }
 
 int main() {

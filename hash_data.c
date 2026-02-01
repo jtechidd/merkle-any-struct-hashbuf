@@ -33,6 +33,7 @@ int hash_data_debug(hash_data_t *hash_data) {
     printf("%02x", hash_data->hash[i]);
   }
   printf("\n");
+  return 0;
 }
 
 int hash_data_free(hash_data_t *hash_data) {

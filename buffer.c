@@ -69,6 +69,7 @@ int buffer_debug(buffer_t *buffer) {
     printf("%02x", buffer->byte_array[i]);
   }
   printf("\n");
+  return 0;
 }
 
 int buffer_free(buffer_t *buffer) {

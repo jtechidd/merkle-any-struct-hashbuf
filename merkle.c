@@ -113,7 +113,7 @@ int merkle_build_recursive(merkle_node_t **merkle_node_out, merkle_t *merkle, da
 
   hash_data_t *node_left_hash_data = &node_left->hash_data;
   hash_data_t *node_right_hash_data = &node_right->hash_data;
-  sort_hash_data(&node_left_hash_data, &node_right_hash_data);
+  TRY(sort_hash_data(&node_left_hash_data, &node_right_hash_data))
   TRY(buffer_memcpy(buffer, node_left_hash_data->hash, node_left_hash_data->hash_length))
   TRY(buffer_memcpy(buffer, node_right_hash_data->hash, node_right_hash_data->hash_length))
 
