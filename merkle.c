@@ -54,10 +54,9 @@ int merkle_new(merkle_t **merkle_out, hash_buffer_t *hash_buffer) {
 }
 
 int sort_hash_data(hash_data_t **hash_data_left, hash_data_t **hash_data_right) {
-  uint8_t *left_hash, *right_hash;
-  RETURN_IF_ERROR(hash_data_get_hash(&left_hash, *hash_data_left))
-  RETURN_IF_ERROR(hash_data_get_hash(&right_hash, *hash_data_right))
-  if (strcmp((const char *)(left_hash), (const char *)(right_hash)) > 0) {
+  int cmp_result;
+  RETURN_IF_ERROR(hash_data_cmp(&cmp_result, *hash_data_left, *hash_data_right))
+  if (cmp_result > 0) {
     hash_data_t *tmp = *hash_data_left;
     *hash_data_left = *hash_data_right;
     *hash_data_right = tmp;
@@ -169,17 +168,6 @@ int merkle_verify(bool *verify_ok_out, merkle_t *merkle, darray_t *proof_array) 
   size_t proof_array_length;
   RETURN_IF_ERROR(darray_get_length(&proof_array_length, proof_array))
 
-  if (proof_array_length == 1) {
-    hash_data_t *proof_hash_data;
-    RETURN_IF_ERROR(darray_get_index((void **)&proof_hash_data, proof_array, 0))
-    uint8_t *hash;
-    RETURN_IF_ERROR(hash_data_get_hash(&hash, proof_hash_data))
-    uint8_t *root_hash;
-    RETURN_IF_ERROR(hash_data_get_hash(&root_hash, merkle->root->hash_data))
-    *verify_ok_out = !strcmp((const char *)hash, (const char *)root_hash);
-    return 0;
-  }
-
   hash_data_t *accumulated_hash_data;
   hash_data_t *first_proof_hash_data;
   RETURN_IF_ERROR(darray_get_index((void **)&first_proof_hash_data, proof_array, 0))
@@ -209,13 +197,10 @@ int merkle_verify(bool *verify_ok_out, merkle_t *merkle, darray_t *proof_array) 
     accumulated_hash_data = new_accumulated_hash_data;
   }
 
-  uint8_t *accumulated_hash;
-  RETURN_IF_ERROR(hash_data_get_hash(&accumulated_hash, accumulated_hash_data))
+  int cmp_result;
+  RETURN_IF_ERROR(hash_data_cmp(&cmp_result, accumulated_hash_data, merkle->root->hash_data))
 
-  uint8_t *root_hash;
-  RETURN_IF_ERROR(hash_data_get_hash(&root_hash, merkle->root->hash_data))
-
-  *verify_ok_out = !strcmp((const char *)accumulated_hash, (const char *)root_hash);
+  *verify_ok_out = !cmp_result;
   RETURN_IF_ERROR(hash_data_free(accumulated_hash_data))
   return 0;
 }

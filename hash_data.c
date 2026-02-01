@@ -49,6 +49,14 @@ int hash_data_set(hash_data_t *hash_data, uint8_t *hash, uint32_t hash_length) {
   return 0;
 }
 
+int hash_data_cmp(int *cmp_result_out, hash_data_t *left_hash_data, hash_data_t *right_hash_data) {
+  if (left_hash_data->hash_length != right_hash_data->hash_length) {
+    return -1;
+  }
+  *cmp_result_out = strncmp((const char *)left_hash_data->hash, (const char *)right_hash_data->hash, left_hash_data->hash_length);
+  return 0;
+}
+
 int hash_data_debug(hash_data_t *hash_data) {
   for (size_t i = 0; i < hash_data->hash_length; i++) {
     printf("%02x", hash_data->hash[i]);
