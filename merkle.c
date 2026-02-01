@@ -196,6 +196,7 @@ int merkle_verify(bool *verify_ok_out, merkle_t *merkle, darray_t *proof_array) 
   }
 
   *verify_ok_out = !strcmp((const char *)accumulated_hash_data->hash, (const char *)merkle->root->hash_data.hash);
+  TRY(hash_data_free(accumulated_hash_data))
   return 0;
 }
 
