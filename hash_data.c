@@ -3,6 +3,11 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef struct hash_data_t {
+  uint8_t *hash;
+  uint32_t hash_length;
+} hash_data_t;
+
 int hash_data_new(hash_data_t **hash_data_out) {
   hash_data_t *hash_data = malloc(sizeof(hash_data_t));
   if (!hash_data) {
@@ -25,6 +30,22 @@ int hash_data_clone(hash_data_t **hash_data_out, hash_data_t *hash_data) {
   memcpy(cloned_hash_data->hash, hash_data->hash, hash_data->hash_length);
   cloned_hash_data->hash_length = hash_data->hash_length;
   *hash_data_out = cloned_hash_data;
+  return 0;
+}
+
+int hash_data_get_hash(uint8_t **hash_out, hash_data_t *hash_data) {
+  *hash_out = hash_data->hash;
+  return 0;
+}
+
+int hash_data_get_hash_length(uint32_t *hash_length_out, hash_data_t *hash_data) {
+  *hash_length_out = hash_data->hash_length;
+  return 0;
+}
+
+int hash_data_set(hash_data_t *hash_data, uint8_t *hash, uint32_t hash_length) {
+  hash_data->hash = hash;
+  hash_data->hash_length = hash_length;
   return 0;
 }
 

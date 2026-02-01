@@ -22,6 +22,7 @@ int merkle_verify(bool *, merkle_t *, darray_t *);
 int merkle_debug(merkle_t *);
 int merkle_free(merkle_t *);
 
-int merkle_node_new(merkle_node_t **, size_t, size_t, merkle_node_t *, merkle_node_t *);
+int merkle_node_new(merkle_node_t **, size_t, size_t, merkle_node_t *, merkle_node_t *, hash_data_t *);
+int merkle_node_free(merkle_node_t **);
 
 #endif

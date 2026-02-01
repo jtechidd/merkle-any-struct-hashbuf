@@ -22,10 +22,10 @@ struct merkle_node_t {
   size_t range_end;
   merkle_node_t *node_left;
   merkle_node_t *node_right;
-  hash_data_t hash_data;
+  hash_data_t *hash_data;
 };
 
-int merkle_node_new(merkle_node_t **merkle_node_out, size_t range_start, size_t range_end, merkle_node_t *node_left, merkle_node_t *node_right) {
+int merkle_node_new(merkle_node_t **merkle_node_out, size_t range_start, size_t range_end, merkle_node_t *node_left, merkle_node_t *node_right, hash_data_t *hash_data) {
   merkle_node_t *merkle_node = malloc(sizeof(merkle_node_t));
   if (!merkle_node) {
     return -1;
@@ -34,6 +34,7 @@ int merkle_node_new(merkle_node_t **merkle_node_out, size_t range_start, size_t 
   merkle_node->range_end = range_end;
   merkle_node->node_left = node_left;
   merkle_node->node_right = node_right;
+  merkle_node->hash_data = hash_data;
   *merkle_node_out = merkle_node;
   return 0;
 }
@@ -53,7 +54,10 @@ int merkle_new(merkle_t **merkle_out, hash_buffer_t *hash_buffer) {
 }
 
 int sort_hash_data(hash_data_t **hash_data_left, hash_data_t **hash_data_right) {
-  if (strcmp((const char *)((*hash_data_left)->hash), (const char *)((*hash_data_right)->hash)) > 0) {
+  uint8_t *left_hash, *right_hash;
+  RETURN_IF_ERROR(hash_data_get_hash(&left_hash, *hash_data_left))
+  RETURN_IF_ERROR(hash_data_get_hash(&right_hash, *hash_data_right))
+  if (strcmp((const char *)(left_hash), (const char *)(right_hash)) > 0) {
     hash_data_t *tmp = *hash_data_left;
     *hash_data_left = *hash_data_right;
     *hash_data_right = tmp;
@@ -78,72 +82,77 @@ int merkle_get_total_leaves(size_t *total_leaves_out, merkle_t *merkle) {
 
 int merkle_build_recursive(merkle_node_t **merkle_node_out, merkle_t *merkle, darray_t *darray, size_t range_start, size_t range_end) {
   if (range_start == range_end) {
-    merkle_node_t *merkle_node;
-    TRY(merkle_node_new(&merkle_node, range_start, range_end, NULL, NULL))
-
     serializable_t *serializable;
-    TRY(darray_get_index((void **)&serializable, darray, range_start))
+    RETURN_IF_ERROR(darray_get_index((void **)&serializable, darray, range_start))
 
     buffer_t *buffer;
-    TRY(buffer_new(&buffer))
+    RETURN_IF_ERROR(buffer_new(&buffer))
+    RETURN_IF_ERROR(serializable->serialize(serializable, buffer))
 
-    TRY(serializable->serialize(serializable, buffer))
+    hash_data_t *hash_data;
+    RETURN_IF_ERROR(hash_data_new(&hash_data));
+    RETURN_IF_ERROR(merkle->hash_buffer->hash(hash_data, buffer))
 
-    TRY(merkle->hash_buffer->hash(&merkle_node->hash_data, buffer))
+    merkle_node_t *merkle_node;
+    RETURN_IF_ERROR(merkle_node_new(&merkle_node, range_start, range_end, NULL, NULL, hash_data))
 
     *merkle_node_out = merkle_node;
     merkle->total_nodes++;
     merkle->total_leaves++;
-    TRY(buffer_free(buffer))
+    RETURN_IF_ERROR(buffer_free(buffer))
     return 0;
   }
 
   size_t mid = (range_start + range_end) >> 1;
 
   merkle_node_t *node_left = NULL;
-  TRY(merkle_build_recursive(&node_left, merkle, darray, range_start, mid))
+  RETURN_IF_ERROR(merkle_build_recursive(&node_left, merkle, darray, range_start, mid))
   merkle_node_t *node_right = NULL;
-  TRY(merkle_build_recursive(&node_right, merkle, darray, mid + 1, range_end))
-
-  merkle_node_t *node_parent = NULL;
-  TRY(merkle_node_new(&node_parent, range_start, range_end, node_left, node_right))
+  RETURN_IF_ERROR(merkle_build_recursive(&node_right, merkle, darray, mid + 1, range_end))
 
   buffer_t *buffer;
-  TRY(buffer_new(&buffer))
+  RETURN_IF_ERROR(buffer_new(&buffer))
 
-  hash_data_t *node_left_hash_data = &node_left->hash_data;
-  hash_data_t *node_right_hash_data = &node_right->hash_data;
-  TRY(sort_hash_data(&node_left_hash_data, &node_right_hash_data))
-  TRY(buffer_memcpy(buffer, node_left_hash_data->hash, node_left_hash_data->hash_length))
-  TRY(buffer_memcpy(buffer, node_right_hash_data->hash, node_right_hash_data->hash_length))
+  hash_data_t *node_left_hash_data = node_left->hash_data;
+  hash_data_t *node_right_hash_data = node_right->hash_data;
+  RETURN_IF_ERROR(sort_hash_data(&node_left_hash_data, &node_right_hash_data))
 
-  TRY(merkle->hash_buffer->hash(&node_parent->hash_data, buffer))
+  RETURN_IF_ERROR(buffer_memcpy_from_hash_data(buffer, node_left_hash_data))
+  RETURN_IF_ERROR(buffer_memcpy_from_hash_data(buffer, node_right_hash_data))
+
+  hash_data_t *hash_data;
+  RETURN_IF_ERROR(hash_data_new(&hash_data))
+
+  RETURN_IF_ERROR(merkle->hash_buffer->hash(hash_data, buffer))
+
+  merkle_node_t *node_parent = NULL;
+  RETURN_IF_ERROR(merkle_node_new(&node_parent, range_start, range_end, node_left, node_right, hash_data))
 
   *merkle_node_out = node_parent;
   merkle->total_nodes++;
-  TRY(buffer_free(buffer))
+  RETURN_IF_ERROR(buffer_free(buffer))
   return 0;
 }
 
 int merkle_build(merkle_t *merkle, darray_t *darray) {
   size_t darray_length;
-  TRY(darray_get_length(&darray_length, darray));
-  TRY(merkle_build_recursive(&merkle->root, merkle, darray, 0, darray_length - 1))
+  RETURN_IF_ERROR(darray_get_length(&darray_length, darray));
+  RETURN_IF_ERROR(merkle_build_recursive(&merkle->root, merkle, darray, 0, darray_length - 1))
   return 0;
 }
 
 int merkle_get_proof_recursive(darray_t *proof_array_out, merkle_t *merkle, merkle_node_t *node, size_t index, size_t range_start, size_t range_end) {
   if (range_start == range_end) {
-    TRY(darray_add(proof_array_out, &node->hash_data))
+    RETURN_IF_ERROR(darray_add(proof_array_out, node->hash_data))
     return 0;
   }
   size_t mid = (range_start + range_end) >> 1;
   if (index <= mid) {
-    TRY(merkle_get_proof_recursive(proof_array_out, merkle, node->node_left, index, range_start, mid))
-    TRY(darray_add(proof_array_out, &node->node_right->hash_data))
+    RETURN_IF_ERROR(merkle_get_proof_recursive(proof_array_out, merkle, node->node_left, index, range_start, mid))
+    RETURN_IF_ERROR(darray_add(proof_array_out, node->node_right->hash_data))
   } else {
-    TRY(merkle_get_proof_recursive(proof_array_out, merkle, node->node_right, index, mid + 1, range_end))
-    TRY(darray_add(proof_array_out, &node->node_left->hash_data))
+    RETURN_IF_ERROR(merkle_get_proof_recursive(proof_array_out, merkle, node->node_right, index, mid + 1, range_end))
+    RETURN_IF_ERROR(darray_add(proof_array_out, node->node_left->hash_data))
   }
   return 0;
 }
@@ -152,68 +161,82 @@ int merkle_get_proof(darray_t *proof_array_out, merkle_t *merkle, size_t index) 
   if (!(index >= 0 && index < merkle->total_leaves)) {
     return -1;
   }
-  TRY(merkle_get_proof_recursive(proof_array_out, merkle, merkle->root, index, 0, merkle->total_leaves - 1))
+  RETURN_IF_ERROR(merkle_get_proof_recursive(proof_array_out, merkle, merkle->root, index, 0, merkle->total_leaves - 1))
   return 0;
 }
 
 int merkle_verify(bool *verify_ok_out, merkle_t *merkle, darray_t *proof_array) {
   size_t proof_array_length;
-  TRY(darray_get_length(&proof_array_length, proof_array))
+  RETURN_IF_ERROR(darray_get_length(&proof_array_length, proof_array))
 
   if (proof_array_length == 1) {
     hash_data_t *proof_hash_data;
-    TRY(darray_get_index((void **)&proof_hash_data, proof_array, 0))
-    *verify_ok_out = !strcmp((const char *)proof_hash_data->hash, (const char *)merkle->root->hash_data.hash);
+    RETURN_IF_ERROR(darray_get_index((void **)&proof_hash_data, proof_array, 0))
+    uint8_t *hash;
+    RETURN_IF_ERROR(hash_data_get_hash(&hash, proof_hash_data))
+    uint8_t *root_hash;
+    RETURN_IF_ERROR(hash_data_get_hash(&root_hash, merkle->root->hash_data))
+    *verify_ok_out = !strcmp((const char *)hash, (const char *)root_hash);
     return 0;
   }
 
   hash_data_t *accumulated_hash_data;
   hash_data_t *first_proof_hash_data;
-  TRY(darray_get_index((void **)&first_proof_hash_data, proof_array, 0))
-  TRY(hash_data_clone(&accumulated_hash_data, first_proof_hash_data))
+  RETURN_IF_ERROR(darray_get_index((void **)&first_proof_hash_data, proof_array, 0))
+  RETURN_IF_ERROR(hash_data_clone(&accumulated_hash_data, first_proof_hash_data))
 
   for (size_t i = 1; i < proof_array_length; i++) {
     hash_data_t *hash_data;
-    TRY(darray_get_index((void **)&hash_data, proof_array, i))
+    RETURN_IF_ERROR(darray_get_index((void **)&hash_data, proof_array, i))
 
-    hash_data_t *hash_data_left = accumulated_hash_data;
-    hash_data_t *hash_data_right = hash_data;
-    TRY(sort_hash_data(&hash_data_left, &hash_data_right))
+    hash_data_t *left_hash_data = accumulated_hash_data;
+    hash_data_t *right_hash_data = hash_data;
+    RETURN_IF_ERROR(sort_hash_data(&left_hash_data, &right_hash_data))
 
     buffer_t *buffer;
-    TRY(buffer_new(&buffer))
+    RETURN_IF_ERROR(buffer_new(&buffer))
 
-    TRY(buffer_memcpy(buffer, hash_data_left->hash, hash_data_left->hash_length))
-    TRY(buffer_memcpy(buffer, hash_data_right->hash, hash_data_right->hash_length))
+    RETURN_IF_ERROR(buffer_memcpy_from_hash_data(buffer, left_hash_data))
+    RETURN_IF_ERROR(buffer_memcpy_from_hash_data(buffer, right_hash_data))
 
     hash_data_t *new_accumulated_hash_data;
-    TRY(hash_data_new(&new_accumulated_hash_data))
-    TRY(merkle->hash_buffer->hash(new_accumulated_hash_data, buffer))
+    RETURN_IF_ERROR(hash_data_new(&new_accumulated_hash_data))
+    RETURN_IF_ERROR(merkle->hash_buffer->hash(new_accumulated_hash_data, buffer))
 
-    TRY(buffer_free(buffer))
-    TRY(hash_data_free(accumulated_hash_data))
+    RETURN_IF_ERROR(buffer_free(buffer))
+    RETURN_IF_ERROR(hash_data_free(accumulated_hash_data))
+
     accumulated_hash_data = new_accumulated_hash_data;
   }
 
-  *verify_ok_out = !strcmp((const char *)accumulated_hash_data->hash, (const char *)merkle->root->hash_data.hash);
-  TRY(hash_data_free(accumulated_hash_data))
+  uint8_t *accumulated_hash;
+  RETURN_IF_ERROR(hash_data_get_hash(&accumulated_hash, accumulated_hash_data))
+
+  uint8_t *root_hash;
+  RETURN_IF_ERROR(hash_data_get_hash(&root_hash, merkle->root->hash_data))
+
+  *verify_ok_out = !strcmp((const char *)accumulated_hash, (const char *)root_hash);
+  RETURN_IF_ERROR(hash_data_free(accumulated_hash_data))
   return 0;
 }
 
 int merkle_walk(merkle_t *merkle, merkle_node_t *merkle_node) {
   printf("Range: [%ld, %ld]\n", merkle_node->range_start, merkle_node->range_end);
-  printf("Hash: ");
-  for (size_t i = 0; i < merkle_node->hash_data.hash_length; i++) {
-    printf("%02x", merkle_node->hash_data.hash[i]);
+  uint8_t *hash;
+  uint32_t hash_length;
+  RETURN_IF_ERROR(hash_data_get_hash(&hash, merkle_node->hash_data))
+  RETURN_IF_ERROR(hash_data_get_hash_length(&hash_length, merkle_node->hash_data))
+  for (size_t i = 0; i < hash_length; i++) {
+    printf("%02x", hash[i]);
   }
   printf("\nNode left address: %p\n", merkle_node->node_left);
   printf("Node right address: %p\n\n", merkle_node->node_right);
 
   if (merkle_node->node_left) {
-    TRY(merkle_walk(merkle, merkle_node->node_left))
+    RETURN_IF_ERROR(merkle_walk(merkle, merkle_node->node_left))
   }
   if (merkle_node->node_right) {
-    TRY(merkle_walk(merkle, merkle_node->node_right))
+    RETURN_IF_ERROR(merkle_walk(merkle, merkle_node->node_right))
   }
   return 0;
 }
@@ -222,6 +245,6 @@ int merkle_debug(merkle_t *merkle) {
   printf("Total nodes: %ld\n", merkle->total_nodes);
   printf("Total leaves: %ld\n\n", merkle->total_leaves);
 
-  TRY(merkle_walk(merkle, merkle->root))
+  RETURN_IF_ERROR(merkle_walk(merkle, merkle->root))
   return 0;
 }
