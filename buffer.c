@@ -1,5 +1,4 @@
 #include "buffer.h"
-#include "common.h"
 #include "hash_data.h"
 
 #include <stdbool.h>
@@ -52,11 +51,18 @@ int buffer_memcpy(buffer_t *buffer, void *data, size_t size) {
 }
 
 int buffer_memcpy_from_hash_data(buffer_t *buffer, hash_data_t *hash_data) {
+  int ret;
   uint8_t *hash;
   uint32_t hash_length;
-  RETURN_IF_ERROR(hash_data_get_hash(&hash, hash_data))
-  RETURN_IF_ERROR(hash_data_get_hash_length(&hash_length, hash_data))
-  RETURN_IF_ERROR(buffer_memcpy(buffer, hash, hash_length))
+  if ((ret = hash_data_get_hash(&hash, hash_data)) < 0) {
+    return ret;
+  }
+  if ((ret = hash_data_get_hash_length(&hash_length, hash_data)) < 0) {
+    return ret;
+  }
+  if ((ret = buffer_memcpy(buffer, hash, hash_length)) < 0) {
+    return ret;
+  }
   return 0;
 }
 
