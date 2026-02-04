@@ -90,7 +90,10 @@ int buffer_debug(buffer_t *buffer) {
 }
 
 int buffer_free(buffer_t *buffer) {
-  free(buffer->byte_array);
+  if (buffer->byte_array != NULL) {
+    free(buffer->byte_array);
+    buffer->byte_array = NULL;
+  }
   free(buffer);
   return 0;
 }

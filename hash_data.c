@@ -66,8 +66,11 @@ int hash_data_debug(hash_data_t *hash_data) {
 }
 
 int hash_data_free(hash_data_t *hash_data) {
-  // TODO: Try a way to inject custom free function for hash
-  free(hash_data->hash);
+  if (hash_data->hash != NULL) {
+    // TODO: Try a way to inject custom free function for hash
+    free(hash_data->hash);
+    hash_data->hash = NULL;
+  }
   free(hash_data);
   return 0;
 }

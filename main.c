@@ -72,44 +72,48 @@ int hash_buffer_sha256_new(hash_buffer_sha256_t **hash_buffer_sha256_out) {
 
 int hash_buffer_sha256_hash(hash_data_t *hash_data_out, buffer_t *buffer) {
   int ret;
-  EVP_MD_CTX *evp_md_ctx;
+  EVP_MD_CTX *evp_md_ctx = NULL;
   if (!(evp_md_ctx = EVP_MD_CTX_new())) {
     return -1;
   }
   if (EVP_DigestInit_ex(evp_md_ctx, EVP_sha256(), NULL) != 1) {
     ret = -1;
-    goto free_evp_md_ctx;
+    goto fail;
   }
   uint8_t *buffer_byte_array;
   size_t buffer_length;
   if ((ret = buffer_get_byte_array(&buffer_byte_array, buffer)) < 0) {
-    goto free_evp_md_ctx;
+    goto fail;
   }
   if ((ret = buffer_get_length(&buffer_length, buffer)) < 0) {
-    goto free_evp_md_ctx;
+    goto fail;
   }
   if (EVP_DigestUpdate(evp_md_ctx, buffer_byte_array, buffer_length) != 1) {
     ret = -1;
-    goto free_evp_md_ctx;
+    goto fail;
   }
-  uint8_t *hash;
+  uint8_t *hash = NULL;
   uint32_t hash_length;
   if (!(hash = OPENSSL_malloc(EVP_MD_size(EVP_sha256())))) {
     ret = -1;
-    goto free_evp_md_ctx;
+    goto fail;
   }
   if (EVP_DigestFinal_ex(evp_md_ctx, hash, &hash_length) != 1) {
     ret = -1;
-    goto free_hash;
+    goto fail;
   }
   hash_data_set(hash_data_out, hash, hash_length);
   EVP_MD_CTX_free(evp_md_ctx);
   return 0;
-free_hash:
-  OPENSSL_free(hash);
-free_evp_md_ctx:
-  EVP_MD_CTX_free(evp_md_ctx);
-ret:
+fail:
+  if (hash != NULL) {
+    OPENSSL_free(hash);
+    hash = NULL;
+  }
+  if (evp_md_ctx != NULL) {
+    EVP_MD_CTX_free(evp_md_ctx);
+    hash = NULL;
+  }
   return ret;
 }
 

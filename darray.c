@@ -61,16 +61,25 @@ int darray_get_capacity(size_t *capacity_out, darray_t *darray) {
 }
 
 int darray_shallow_free(darray_t *darray) {
-  free(darray->array);
+  if (darray->array != NULL) {
+    free(darray->array);
+    darray->array = NULL;
+  }
   free(darray);
   return 0;
 }
 
 int darray_free(darray_t *darray) {
   for (size_t i = 0; i < darray->length; i++) {
-    free(darray->array[i]);
+    if (darray->array[i] != NULL) {
+      free(darray->array[i]);
+      darray->array[i] = NULL;
+    }
   }
-  free(darray->array);
+  if (darray->array != NULL) {
+    free(darray->array);
+    darray->array = NULL;
+  }
   free(darray);
   return 0;
 }

@@ -39,8 +39,24 @@ int merkle_node_new(merkle_node_t **merkle_node_out, size_t range_start, size_t 
 }
 
 int merkle_node_free(merkle_node_t *merkle_node) {
-  free(merkle_node->hash_data);
+  if (merkle_node->hash_data != NULL) {
+    free(merkle_node->hash_data);
+    merkle_node->hash_data = NULL;
+  }
   free(merkle_node);
+  return 0;
+}
+
+int merkle_node_recursively_free(merkle_node_t *merkle_node) {
+  if (merkle_node->node_left != NULL) {
+    merkle_node_recursively_free(merkle_node->node_left);
+    merkle_node->node_left = NULL;
+  }
+  if (merkle_node->node_right != NULL) {
+    merkle_node_recursively_free(merkle_node->node_right);
+    merkle_node->node_right = NULL;
+  }
+  merkle_node_free(merkle_node);
   return 0;
 }
 
@@ -92,29 +108,30 @@ int merkle_build_recursive(merkle_node_t **merkle_node_out, merkle_t *merkle, da
 
   if (range_start == range_end) {
     serializable_t *serializable;
+    buffer_t *buffer = NULL;
+    hash_data_t *hash_data = NULL;
+    merkle_node_t *merkle_node = NULL;
+
     if ((ret = darray_get_index((void **)&serializable, darray, range_start)) < 0) {
-      goto leave_ret;
+      goto leave_fail;
     }
 
-    buffer_t *buffer;
     if ((ret = buffer_new(&buffer)) < 0) {
-      goto leave_ret;
+      goto leave_fail;
     }
     if ((ret = serializable->serialize(serializable, buffer)) < 0) {
-      goto leave_free_buffer;
+      goto leave_fail;
     }
 
-    hash_data_t *hash_data;
     if ((ret = hash_data_new(&hash_data)) < 0) {
-      goto leave_free_buffer;
+      goto leave_fail;
     }
     if ((merkle->hash_buffer->hash(hash_data, buffer)) < 0) {
-      goto leave_free_hash_data;
+      goto leave_fail;
     }
 
-    merkle_node_t *merkle_node;
     if ((ret = merkle_node_new(&merkle_node, range_start, range_end, NULL, NULL, hash_data)) < 0) {
-      goto leave_free_hash_data;
+      goto leave_fail;
     }
 
     *merkle_node_out = merkle_node;
@@ -122,70 +139,81 @@ int merkle_build_recursive(merkle_node_t **merkle_node_out, merkle_t *merkle, da
     merkle->total_leaves++;
     return 0;
 
-  leave_free_hash_data:
-    hash_data_free(hash_data);
-  leave_free_buffer:
-    buffer_free(buffer);
-  leave_ret:
+  leave_fail:
+    if (hash_data != NULL) {
+      hash_data_free(hash_data);
+      hash_data = NULL;
+    }
+    if (buffer != NULL) {
+      buffer_free(buffer);
+      buffer = NULL;
+    }
     return ret;
   }
 
   size_t mid = (range_start + range_end) >> 1;
-
   merkle_node_t *node_left = NULL;
-  if ((ret = merkle_build_recursive(&node_left, merkle, darray, range_start, mid)) < 0) {
-    goto ret;
-  }
   merkle_node_t *node_right = NULL;
+  buffer_t *buffer = NULL;
+  hash_data_t *hash_data;
+  merkle_node_t *node_parent = NULL;
+
+  if ((ret = merkle_build_recursive(&node_left, merkle, darray, range_start, mid)) < 0) {
+    goto fail;
+  }
   if ((ret = merkle_build_recursive(&node_right, merkle, darray, mid + 1, range_end)) < 0) {
-    goto free_left_node;
+    goto fail;
   }
-
-  buffer_t *buffer;
-  if ((ret = buffer_new(&buffer)) < 0) {
-    goto free_right_node;
-  }
-
   hash_data_t *node_left_hash_data = node_left->hash_data;
   hash_data_t *node_right_hash_data = node_right->hash_data;
+
+  if ((ret = buffer_new(&buffer)) < 0) {
+    goto fail;
+  }
+
   if ((ret = sort_hash_data(&node_left_hash_data, &node_right_hash_data)) < 0) {
-    goto free_buffer;
+    goto fail;
   }
 
   if ((ret = buffer_memcpy_from_hash_data(buffer, node_left_hash_data)) < 0) {
-    goto free_buffer;
+    goto fail;
   }
   if ((ret = buffer_memcpy_from_hash_data(buffer, node_right_hash_data)) < 0) {
-    goto free_buffer;
+    goto fail;
   }
 
-  hash_data_t *hash_data;
   if ((ret = hash_data_new(&hash_data)) < 0) {
-    goto free_buffer;
+    goto fail;
   }
 
   if ((ret = merkle->hash_buffer->hash(hash_data, buffer)) < 0) {
-    goto free_hash_data;
+    goto fail;
   }
 
-  merkle_node_t *node_parent = NULL;
   if ((ret = merkle_node_new(&node_parent, range_start, range_end, node_left, node_right, hash_data)) < 0) {
-    goto free_hash_data;
+    goto fail;
   }
 
   *merkle_node_out = node_parent;
   merkle->total_nodes++;
   return 0;
 
-free_hash_data:
-  hash_data_free(hash_data);
-free_buffer:
-  buffer_free(buffer);
-free_right_node:
-  merkle_node_free(node_right);
-free_left_node:
-  merkle_node_free(node_left);
-ret:
+fail:
+  if (hash_data != NULL) {
+    hash_data_free(hash_data);
+    hash_data = NULL;
+  }
+  if (buffer != NULL) {
+    buffer_free(buffer);
+  }
+  if (node_left != NULL) {
+    merkle_node_recursively_free(node_left);
+    node_left = NULL;
+  }
+  if (node_right != NULL) {
+    merkle_node_recursively_free(node_right);
+    node_right = NULL;
+  }
   return ret;
 }
 
@@ -242,50 +270,54 @@ int merkle_get_proof(darray_t *proof_array_out, merkle_t *merkle, size_t index) 
 int merkle_verify(bool *verify_ok_out, merkle_t *merkle, darray_t *proof_array) {
   int ret;
   size_t proof_array_length;
-  hash_data_t *accumulated_hash_data;
-  hash_data_t *first_proof_hash_data;
-  hash_data_t *hash_data;
-  hash_data_t *left_hash_data = accumulated_hash_data;
-  hash_data_t *right_hash_data = hash_data;
-  buffer_t *buffer;
-  hash_data_t *new_accumulated_hash_data;
+
+  hash_data_t *first_proof_hash_data = NULL;
+  hash_data_t *hash_data = NULL;
+  hash_data_t *left_hash_data = NULL;
+  hash_data_t *right_hash_data = NULL;
+
+  hash_data_t *accumulated_hash_data = NULL;
+  buffer_t *buffer = NULL;
+  hash_data_t *new_accumulated_hash_data = NULL;
 
   if ((ret = darray_get_length(&proof_array_length, proof_array)) < 0) {
-    goto ret;
+    goto fail;
   }
 
   if ((ret = darray_get_index((void **)&first_proof_hash_data, proof_array, 0))) {
-    goto ret;
+    goto fail;
   }
   if ((ret = hash_data_clone(&accumulated_hash_data, first_proof_hash_data))) {
-    goto ret;
+    goto fail;
   }
 
   for (size_t i = 1; i < proof_array_length; i++) {
     if ((ret = darray_get_index((void **)&hash_data, proof_array, i)) < 0) {
-      goto free_accumulated_hash_data;
+      goto fail;
     }
 
+    left_hash_data = accumulated_hash_data;
+    right_hash_data = hash_data;
     if ((ret = sort_hash_data(&left_hash_data, &right_hash_data))) {
-      goto free_accumulated_hash_data;
+      goto fail;
     }
 
     if ((ret = buffer_new(&buffer)) < 0) {
-      goto free_accumulated_hash_data;
+      goto fail;
     }
 
     if ((ret = buffer_memcpy_from_hash_data(buffer, left_hash_data)) < 0) {
-      goto free_buffer;
+      goto fail;
     }
     if ((ret = buffer_memcpy_from_hash_data(buffer, right_hash_data)) < 0) {
-      goto free_buffer;
+      goto fail;
     }
 
     if ((ret = hash_data_new(&new_accumulated_hash_data)) < 0) {
-      goto free_buffer;
+      goto fail;
     }
     if ((ret = merkle->hash_buffer->hash(new_accumulated_hash_data, buffer)) < 0) {
-      goto free_new_accumulated_hash_data;
+      goto fail;
     }
 
     buffer_free(buffer);
@@ -296,20 +328,26 @@ int merkle_verify(bool *verify_ok_out, merkle_t *merkle, darray_t *proof_array) 
 
   int cmp_result;
   if ((ret = hash_data_cmp(&cmp_result, accumulated_hash_data, merkle->root->hash_data)) < 0) {
-    goto free_accumulated_hash_data;
+    goto fail;
   }
 
   *verify_ok_out = !cmp_result;
   hash_data_free(accumulated_hash_data);
   return 0;
 
-free_new_accumulated_hash_data:
-  hash_data_free(new_accumulated_hash_data);
-free_buffer:
-  buffer_free(buffer);
-free_accumulated_hash_data:
-  hash_data_free(accumulated_hash_data);
-ret:
+fail:
+  if (new_accumulated_hash_data != NULL) {
+    hash_data_free(new_accumulated_hash_data);
+    new_accumulated_hash_data = NULL;
+  }
+  if (buffer != NULL) {
+    buffer_free(buffer);
+    buffer = NULL;
+  }
+  if (accumulated_hash_data != NULL) {
+    hash_data_free(accumulated_hash_data);
+    accumulated_hash_data = NULL;
+  }
   return ret;
 }
 
