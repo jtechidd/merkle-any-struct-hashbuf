@@ -47,15 +47,14 @@ int player_serialize(serializable_t *serializable, buffer_t *buffer) {
   if ((ret = buffer_memcpy(buffer, (void *)player->name, name_len)) < 0) {
     return ret;
   }
-  if ((ret = buffer_memcpy(buffer, &player->points, sizeof(player->points)) < 0)) {
+  if ((ret = buffer_memcpy(buffer, &player->points, sizeof(player->points)) <
+             0)) {
     return ret;
   }
   return 0;
 }
 
-int player_free(player_t *player) {
-  free(player);
-}
+int player_free(player_t *player) { free(player); }
 
 typedef struct hash_buffer_sha256_t {
   hash_buffer_t hash_buffer;
@@ -64,7 +63,8 @@ typedef struct hash_buffer_sha256_t {
 int hash_buffer_sha256_hash(hash_data_t *, buffer_t *);
 
 int hash_buffer_sha256_new(hash_buffer_sha256_t **hash_buffer_sha256_out) {
-  hash_buffer_sha256_t *hash_buffer_sha256 = malloc(sizeof(hash_buffer_sha256_t));
+  hash_buffer_sha256_t *hash_buffer_sha256 =
+      malloc(sizeof(hash_buffer_sha256_t));
   hash_buffer_sha256->hash_buffer.hash = hash_buffer_sha256_hash;
   *hash_buffer_sha256_out = hash_buffer_sha256;
   return 0;

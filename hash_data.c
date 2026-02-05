@@ -38,7 +38,8 @@ int hash_data_get_hash(uint8_t **hash_out, hash_data_t *hash_data) {
   return 0;
 }
 
-int hash_data_get_hash_length(uint32_t *hash_length_out, hash_data_t *hash_data) {
+int hash_data_get_hash_length(uint32_t *hash_length_out,
+                              hash_data_t *hash_data) {
   *hash_length_out = hash_data->hash_length;
   return 0;
 }
@@ -49,11 +50,14 @@ int hash_data_set(hash_data_t *hash_data, uint8_t *hash, uint32_t hash_length) {
   return 0;
 }
 
-int hash_data_cmp(int *cmp_result_out, hash_data_t *left_hash_data, hash_data_t *right_hash_data) {
+int hash_data_cmp(int *cmp_result_out, hash_data_t *left_hash_data,
+                  hash_data_t *right_hash_data) {
   if (left_hash_data->hash_length != right_hash_data->hash_length) {
     return -1;
   }
-  *cmp_result_out = strncmp((const char *)left_hash_data->hash, (const char *)right_hash_data->hash, left_hash_data->hash_length);
+  *cmp_result_out =
+      strncmp((const char *)left_hash_data->hash,
+              (const char *)right_hash_data->hash, left_hash_data->hash_length);
   return 0;
 }
 

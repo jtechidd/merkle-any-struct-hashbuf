@@ -37,7 +37,8 @@ int buffer_memcpy(buffer_t *buffer, void *data, size_t size) {
     capacity <<= 1;
   }
   if (capacity > buffer->capacity) {
-    uint8_t *new_byte_array = realloc(buffer->byte_array, capacity * sizeof(uint8_t));
+    uint8_t *new_byte_array =
+        realloc(buffer->byte_array, capacity * sizeof(uint8_t));
     if (!new_byte_array) {
       perror("realloc()");
       return -1;

@@ -24,7 +24,9 @@ struct merkle_node_t {
   hash_data_t *hash_data;
 };
 
-int merkle_node_new(merkle_node_t **merkle_node_out, size_t range_start, size_t range_end, merkle_node_t *node_left, merkle_node_t *node_right, hash_data_t *hash_data) {
+int merkle_node_new(merkle_node_t **merkle_node_out, size_t range_start,
+                    size_t range_end, merkle_node_t *node_left,
+                    merkle_node_t *node_right, hash_data_t *hash_data) {
   merkle_node_t *merkle_node = malloc(sizeof(merkle_node_t));
   if (!merkle_node) {
     return -1;
@@ -74,10 +76,12 @@ int merkle_new(merkle_t **merkle_out, hash_buffer_t *hash_buffer) {
   return 0;
 }
 
-int sort_hash_data(hash_data_t **hash_data_left, hash_data_t **hash_data_right) {
+int sort_hash_data(hash_data_t **hash_data_left,
+                   hash_data_t **hash_data_right) {
   int ret;
   int cmp_result;
-  if ((ret = hash_data_cmp(&cmp_result, *hash_data_left, *hash_data_right)) < 0) {
+  if ((ret = hash_data_cmp(&cmp_result, *hash_data_left, *hash_data_right)) <
+      0) {
     return ret;
   }
   if (cmp_result > 0) {
@@ -103,7 +107,9 @@ int merkle_get_total_leaves(size_t *total_leaves_out, merkle_t *merkle) {
   return 0;
 }
 
-int merkle_build_recursive(merkle_node_t **merkle_node_out, merkle_t *merkle, darray_t *darray, size_t range_start, size_t range_end) {
+int merkle_build_recursive(merkle_node_t **merkle_node_out, merkle_t *merkle,
+                           darray_t *darray, size_t range_start,
+                           size_t range_end) {
   int ret;
 
   if (range_start == range_end) {
@@ -112,7 +118,8 @@ int merkle_build_recursive(merkle_node_t **merkle_node_out, merkle_t *merkle, da
     hash_data_t *hash_data = NULL;
     merkle_node_t *merkle_node = NULL;
 
-    if ((ret = darray_get_index((void **)&serializable, darray, range_start)) < 0) {
+    if ((ret = darray_get_index((void **)&serializable, darray, range_start)) <
+        0) {
       goto leave_fail;
     }
 
@@ -130,7 +137,8 @@ int merkle_build_recursive(merkle_node_t **merkle_node_out, merkle_t *merkle, da
       goto leave_fail;
     }
 
-    if ((ret = merkle_node_new(&merkle_node, range_start, range_end, NULL, NULL, hash_data)) < 0) {
+    if ((ret = merkle_node_new(&merkle_node, range_start, range_end, NULL, NULL,
+                               hash_data)) < 0) {
       goto leave_fail;
     }
 
@@ -158,10 +166,12 @@ int merkle_build_recursive(merkle_node_t **merkle_node_out, merkle_t *merkle, da
   hash_data_t *hash_data;
   merkle_node_t *node_parent = NULL;
 
-  if ((ret = merkle_build_recursive(&node_left, merkle, darray, range_start, mid)) < 0) {
+  if ((ret = merkle_build_recursive(&node_left, merkle, darray, range_start,
+                                    mid)) < 0) {
     goto fail;
   }
-  if ((ret = merkle_build_recursive(&node_right, merkle, darray, mid + 1, range_end)) < 0) {
+  if ((ret = merkle_build_recursive(&node_right, merkle, darray, mid + 1,
+                                    range_end)) < 0) {
     goto fail;
   }
   hash_data_t *node_left_hash_data = node_left->hash_data;
@@ -190,7 +200,8 @@ int merkle_build_recursive(merkle_node_t **merkle_node_out, merkle_t *merkle, da
     goto fail;
   }
 
-  if ((ret = merkle_node_new(&node_parent, range_start, range_end, node_left, node_right, hash_data)) < 0) {
+  if ((ret = merkle_node_new(&node_parent, range_start, range_end, node_left,
+                             node_right, hash_data)) < 0) {
     goto fail;
   }
 
@@ -223,13 +234,16 @@ int merkle_build(merkle_t *merkle, darray_t *darray) {
   if ((ret = darray_get_length(&darray_length, darray))) {
     return ret;
   }
-  if ((ret = merkle_build_recursive(&merkle->root, merkle, darray, 0, darray_length - 1) < 0)) {
+  if ((ret = merkle_build_recursive(&merkle->root, merkle, darray, 0,
+                                    darray_length - 1) < 0)) {
     return ret;
   }
   return 0;
 }
 
-int merkle_get_proof_recursive(darray_t *proof_array_out, merkle_t *merkle, merkle_node_t *node, size_t index, size_t range_start, size_t range_end) {
+int merkle_get_proof_recursive(darray_t *proof_array_out, merkle_t *merkle,
+                               merkle_node_t *node, size_t index,
+                               size_t range_start, size_t range_end) {
   int ret;
   if (range_start == range_end) {
     if ((ret = darray_add(proof_array_out, node->hash_data)) < 0) {
@@ -239,14 +253,18 @@ int merkle_get_proof_recursive(darray_t *proof_array_out, merkle_t *merkle, merk
   }
   size_t mid = (range_start + range_end) >> 1;
   if (index <= mid) {
-    if ((ret = merkle_get_proof_recursive(proof_array_out, merkle, node->node_left, index, range_start, mid))) {
+    if ((ret = merkle_get_proof_recursive(proof_array_out, merkle,
+                                          node->node_left, index, range_start,
+                                          mid))) {
       return ret;
     }
     if ((ret = darray_add(proof_array_out, node->node_right->hash_data))) {
       return ret;
     }
   } else {
-    if ((ret = merkle_get_proof_recursive(proof_array_out, merkle, node->node_right, index, mid + 1, range_end))) {
+    if ((ret = merkle_get_proof_recursive(proof_array_out, merkle,
+                                          node->node_right, index, mid + 1,
+                                          range_end))) {
       return ret;
     }
     if ((ret = darray_add(proof_array_out, node->node_left->hash_data))) {
@@ -256,18 +274,22 @@ int merkle_get_proof_recursive(darray_t *proof_array_out, merkle_t *merkle, merk
   return 0;
 }
 
-int merkle_get_proof(darray_t *proof_array_out, merkle_t *merkle, size_t index) {
+int merkle_get_proof(darray_t *proof_array_out, merkle_t *merkle,
+                     size_t index) {
   int ret;
   if (!(index >= 0 && index < merkle->total_leaves)) {
     return -1;
   }
-  if ((ret = merkle_get_proof_recursive(proof_array_out, merkle, merkle->root, index, 0, merkle->total_leaves - 1) < 0)) {
+  if ((ret = merkle_get_proof_recursive(proof_array_out, merkle, merkle->root,
+                                        index, 0,
+                                        merkle->total_leaves - 1) < 0)) {
     return ret;
   }
   return 0;
 }
 
-int merkle_verify(bool *verify_ok_out, merkle_t *merkle, darray_t *proof_array) {
+int merkle_verify(bool *verify_ok_out, merkle_t *merkle,
+                  darray_t *proof_array) {
   int ret;
   size_t proof_array_length;
 
@@ -284,7 +306,8 @@ int merkle_verify(bool *verify_ok_out, merkle_t *merkle, darray_t *proof_array) 
     goto fail;
   }
 
-  if ((ret = darray_get_index((void **)&first_proof_hash_data, proof_array, 0))) {
+  if ((ret =
+           darray_get_index((void **)&first_proof_hash_data, proof_array, 0))) {
     goto fail;
   }
   if ((ret = hash_data_clone(&accumulated_hash_data, first_proof_hash_data))) {
@@ -316,7 +339,8 @@ int merkle_verify(bool *verify_ok_out, merkle_t *merkle, darray_t *proof_array) 
     if ((ret = hash_data_new(&new_accumulated_hash_data)) < 0) {
       goto fail;
     }
-    if ((ret = merkle->hash_buffer->hash(new_accumulated_hash_data, buffer)) < 0) {
+    if ((ret = merkle->hash_buffer->hash(new_accumulated_hash_data, buffer)) <
+        0) {
       goto fail;
     }
 
@@ -327,7 +351,8 @@ int merkle_verify(bool *verify_ok_out, merkle_t *merkle, darray_t *proof_array) 
   }
 
   int cmp_result;
-  if ((ret = hash_data_cmp(&cmp_result, accumulated_hash_data, merkle->root->hash_data)) < 0) {
+  if ((ret = hash_data_cmp(&cmp_result, accumulated_hash_data,
+                           merkle->root->hash_data)) < 0) {
     goto fail;
   }
 
@@ -354,13 +379,15 @@ fail:
 int merkle_walk(merkle_t *merkle, merkle_node_t *merkle_node) {
   int ret;
 
-  printf("Range: [%ld, %ld]\n", merkle_node->range_start, merkle_node->range_end);
+  printf("Range: [%ld, %ld]\n", merkle_node->range_start,
+         merkle_node->range_end);
   uint8_t *hash;
   uint32_t hash_length;
   if ((ret = hash_data_get_hash(&hash, merkle_node->hash_data)) < 0) {
     return ret;
   }
-  if ((ret = hash_data_get_hash_length(&hash_length, merkle_node->hash_data)) < 0) {
+  if ((ret = hash_data_get_hash_length(&hash_length, merkle_node->hash_data)) <
+      0) {
     return ret;
   }
   for (size_t i = 0; i < hash_length; i++) {

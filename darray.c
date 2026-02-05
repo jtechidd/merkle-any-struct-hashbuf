@@ -38,7 +38,8 @@ int darray_get_index(void **entry_out, darray_t *darray, size_t index) {
 int darray_add(darray_t *darray, void *entry) {
   if (darray->length >= darray->capacity) {
     darray->capacity <<= 1;
-    void **realloc_array = realloc(darray->array, darray->capacity * sizeof(void *));
+    void **realloc_array =
+        realloc(darray->array, darray->capacity * sizeof(void *));
     if (!realloc_array) {
       perror("realloc()");
       return -1;
