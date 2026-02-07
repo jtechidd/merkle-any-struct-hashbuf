@@ -7,10 +7,10 @@
 typedef struct buffer_t buffer_t;
 typedef struct hash_data_t hash_data_t;
 
-typedef int (*hash_t)(hash_data_t *, buffer_t *);
+typedef int hash_t(hash_data_t *, buffer_t *);
 
 typedef struct hash_buffer_t {
-  hash_t hash;
+  hash_t *hash;
 } hash_buffer_t;
 
 #endif
