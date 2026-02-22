@@ -3,7 +3,7 @@ project(MerkleAnyStructHashBuf C)
 
 find_package(OpenSSL)
 
-add_library(libmerkle SHARED darray.c buffer.c hash_data.c merkle.c)
+add_library(libmerkle SHARED alloc.c darray.c buffer.c hash_data.c merkle.c)
 target_link_libraries(libmerkle PUBLIC OpenSSL::Crypto)
 
 add_executable(merkle_main main.c)

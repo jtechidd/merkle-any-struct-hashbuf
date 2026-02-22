@@ -4,10 +4,10 @@
 typedef struct buffer_t buffer_t;
 typedef struct serializable_t serializable_t;
 
-typedef int (*serialize_t)(serializable_t *, buffer_t *);
+typedef void serialize_fn(serializable_t *, buffer_t *);
 
 typedef struct serializable_t {
-  serialize_t serialize;
+  serialize_fn* serialize;
 } serializable_t;
 
 #endif

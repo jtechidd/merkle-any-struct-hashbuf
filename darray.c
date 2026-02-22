@@ -1,4 +1,5 @@
 #include "darray.h"
+#include "alloc.h"
 
 #include <stdio.h>
 
@@ -10,67 +11,51 @@ struct darray_t {
   size_t length;
 };
 
-int darray_new(darray_t **darray_out) {
-  darray_t *darray = malloc(sizeof(darray_t));
-  if (!darray) {
-    return -1;
-  }
+darray_t *darray_new() {
+  darray_t *darray = xmalloc(sizeof(darray_t));
   darray->capacity = INITIAL_CAPACITY;
   darray->length = 0;
-  darray->array = calloc(darray->capacity, sizeof(void *));
-  if (!darray->array) {
-    free(darray);
-    return -1;
-  }
-  *darray_out = darray;
-  return 0;
+  darray->array = xmalloc(darray->capacity * sizeof(void *));
+  return darray;
 }
 
-int darray_get_index(void **entry_out, darray_t *darray, size_t index) {
+void *darray_get_index(darray_t *darray, size_t index) {
   if (!(index >= 0 && index < darray->length)) {
-    *entry_out = NULL;
-    return -1;
+    return NULL;
   }
-  *entry_out = darray->array[index];
-  return 0;
+  return darray->array[index];
 }
 
-int darray_add(darray_t *darray, void *entry) {
+void darray_add(darray_t *darray, void *entry) {
   if (darray->length >= darray->capacity) {
     darray->capacity <<= 1;
     void **realloc_array =
-        realloc(darray->array, darray->capacity * sizeof(void *));
-    if (!realloc_array) {
-      perror("realloc()");
-      return -1;
-    }
+        xrealloc(darray->array, darray->capacity * sizeof(void *));
     darray->array = realloc_array;
   }
   darray->array[darray->length] = entry;
   darray->length++;
-  return 0;
 }
 
-int darray_get_length(size_t *length_out, darray_t *darray) {
-  *length_out = darray->length;
-  return 0;
-}
+size_t darray_get_length(darray_t *darray) { return darray->length; }
 
-int darray_get_capacity(size_t *capacity_out, darray_t *darray) {
-  *capacity_out = darray->capacity;
-  return 0;
-}
+size_t darray_get_capacity(darray_t *darray) { return darray->capacity; }
 
-int darray_shallow_free(darray_t *darray) {
+void darray_shallow_free(darray_t *darray) {
+  if (!darray) {
+    return;
+  }
   if (darray->array != NULL) {
     free(darray->array);
     darray->array = NULL;
   }
   free(darray);
-  return 0;
 }
 
-int darray_free(darray_t *darray) {
+void darray_free(darray_t *darray) {
+  if (!darray) {
+    return;
+  }
   for (size_t i = 0; i < darray->length; i++) {
     if (darray->array[i] != NULL) {
       free(darray->array[i]);
@@ -82,5 +67,4 @@ int darray_free(darray_t *darray) {
     darray->array = NULL;
   }
   free(darray);
-  return 0;
 }

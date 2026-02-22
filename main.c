@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "alloc.h"
 #include "buffer.h"
 #include "darray.h"
 #include "hash_buffer.h"
@@ -22,135 +23,81 @@ typedef struct player_t {
   uint32_t points;
 } player_t;
 
-int player_serialize(serializable_t *, buffer_t *);
+void player_serialize(serializable_t *, buffer_t *);
 
-int player_new(player_t **player_out, const char *name, uint32_t points) {
-  player_t *player = malloc(sizeof(player_t));
-  if (!player) {
-    *player_out = NULL;
-    return -1;
-  }
+player_t *player_new(const char *name, uint32_t points) {
+  player_t *player = xmalloc(sizeof(player_t));
   player->name = name;
   player->points = points;
   player->serializable.serialize = player_serialize;
-  *player_out = player;
-  return 0;
+  return player;
 }
 
-int player_serialize(serializable_t *serializable, buffer_t *buffer) {
-  int ret;
+void player_serialize(serializable_t *serializable, buffer_t *buffer) {
   player_t *player = (player_t *)serializable;
   size_t name_len = strlen(player->name);
-  if ((ret = buffer_memcpy(buffer, &name_len, sizeof(name_len)) < 0)) {
-    return ret;
-  }
-  if ((ret = buffer_memcpy(buffer, (void *)player->name, name_len)) < 0) {
-    return ret;
-  }
-  if ((ret = buffer_memcpy(buffer, &player->points, sizeof(player->points)) <
-             0)) {
-    return ret;
-  }
-  return 0;
+  buffer_memcpy(buffer, &name_len, sizeof(name_len));
+  buffer_memcpy(buffer, (void *)player->name, name_len);
+  buffer_memcpy(buffer, &player->points, sizeof(player->points));
 }
 
-int player_free(player_t *player) { free(player); }
+void player_free(player_t *player) { free(player); }
 
 typedef struct hash_buffer_sha256_t {
   hash_buffer_t hash_buffer;
 } hash_buffer_sha256_t;
 
-int hash_buffer_sha256_hash(hash_data_t *, buffer_t *);
+void hash_buffer_sha256_hash(hash_data_t *, buffer_t *);
 
-int hash_buffer_sha256_new(hash_buffer_sha256_t **hash_buffer_sha256_out) {
+hash_buffer_sha256_t *hash_buffer_sha256_new() {
   hash_buffer_sha256_t *hash_buffer_sha256 =
-      malloc(sizeof(hash_buffer_sha256_t));
+      xmalloc(sizeof(hash_buffer_sha256_t));
   hash_buffer_sha256->hash_buffer.hash = hash_buffer_sha256_hash;
-  *hash_buffer_sha256_out = hash_buffer_sha256;
-  return 0;
+  return hash_buffer_sha256;
 }
 
-int hash_buffer_sha256_hash(hash_data_t *hash_data_out, buffer_t *buffer) {
+void hash_buffer_sha256_hash(hash_data_t *hash_data_out, buffer_t *buffer) {
   int ret;
   EVP_MD_CTX *evp_md_ctx = NULL;
   if (!(evp_md_ctx = EVP_MD_CTX_new())) {
-    return -1;
+    return;
   }
   if (EVP_DigestInit_ex(evp_md_ctx, EVP_sha256(), NULL) != 1) {
-    ret = -1;
-    goto fail;
+    return;
   }
-  uint8_t *buffer_byte_array;
-  size_t buffer_length;
-  if ((ret = buffer_get_byte_array(&buffer_byte_array, buffer)) < 0) {
-    goto fail;
-  }
-  if ((ret = buffer_get_length(&buffer_length, buffer)) < 0) {
-    goto fail;
-  }
+  uint8_t *buffer_byte_array = buffer_get_byte_array(buffer);
+  size_t buffer_length = buffer_get_length(buffer);
   if (EVP_DigestUpdate(evp_md_ctx, buffer_byte_array, buffer_length) != 1) {
-    ret = -1;
-    goto fail;
+    return;
   }
   uint8_t *hash = NULL;
   uint32_t hash_length;
   if (!(hash = OPENSSL_malloc(EVP_MD_size(EVP_sha256())))) {
-    ret = -1;
-    goto fail;
+    return;
   }
   if (EVP_DigestFinal_ex(evp_md_ctx, hash, &hash_length) != 1) {
-    ret = -1;
-    goto fail;
+    return;
   }
   hash_data_set(hash_data_out, hash, hash_length);
   EVP_MD_CTX_free(evp_md_ctx);
-  return 0;
-fail:
-  if (hash != NULL) {
-    OPENSSL_free(hash);
-    hash = NULL;
-  }
-  if (evp_md_ctx != NULL) {
-    EVP_MD_CTX_free(evp_md_ctx);
-    hash = NULL;
-  }
-  return ret;
 }
 
-int add_player(darray_t *players, const char *name, uint32_t points) {
-  int ret;
-  player_t *player;
-  if ((ret = player_new(&player, name, points)) < 0) {
-    return ret;
-  }
-  if ((ret = darray_add(players, player)) < 0) {
-    player_free(player);
-    return ret;
-  }
-  return 0;
+void add_player(darray_t *players, const char *name, uint32_t points) {
+  player_t *player = player_new(name, points);
+  darray_add(players, player);
 }
 
-int proof_array_debug(darray_t *proof_array) {
-  int ret;
-  size_t length;
-  if ((ret = darray_get_length(&length, proof_array)) < 0) {
-    return ret;
-  }
+void proof_array_debug(darray_t *proof_array) {
+  size_t length = darray_get_length(proof_array);
+
   for (size_t i = 0; i < length; i++) {
-    hash_data_t *hash_data;
-    if ((ret = darray_get_index((void **)&hash_data, proof_array, i)) < 0) {
-      return ret;
-    }
-    if ((ret = hash_data_debug(hash_data)) < 0) {
-      return ret;
-    }
+    hash_data_t *hash_data = darray_get_index(proof_array, i);
+    hash_data_debug(hash_data);
   }
-  return 0;
 }
 
 int main() {
-  darray_t *players;
-  darray_new(&players);
+  darray_t *players = darray_new();
 
   add_player(players, "Adam", 1234);
   add_player(players, "Eva", 5678);
@@ -161,28 +108,23 @@ int main() {
   add_player(players, "Debug", 900);
   add_player(players, "Creator", 5000);
 
-  hash_buffer_sha256_t *hash_buffer_256;
-  hash_buffer_sha256_new(&hash_buffer_256);
+  hash_buffer_sha256_t *hash_buffer_256 = hash_buffer_sha256_new();
 
-  merkle_t *merkle;
-  merkle_new(&merkle, (hash_buffer_t *)hash_buffer_256);
+  merkle_t *merkle = merkle_new((hash_buffer_t *)hash_buffer_256);
   merkle_build(merkle, players);
 
   merkle_debug(merkle);
 
   darray_t *proof_array;
 
-  size_t total_leaves;
-  merkle_get_total_leaves(&total_leaves, merkle);
+  size_t total_leaves = merkle_get_total_leaves(merkle);
 
   for (size_t i = 0; i < total_leaves; i++) {
     printf("Getting proof for leaf index: %ld\n", i);
-    darray_new(&proof_array);
-    merkle_get_proof(proof_array, merkle, i);
+    darray_t *proof_array = merkle_get_proof(merkle, i);
     proof_array_debug(proof_array);
 
-    bool verify_ok;
-    merkle_verify(&verify_ok, merkle, proof_array);
+    bool verify_ok = merkle_verify(merkle, proof_array);
 
     printf("Verifying proof result: %d\n\n", verify_ok);
   }
